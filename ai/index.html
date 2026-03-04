@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI赋能培训 · 思维导图（视觉重构版）</title>
+    <!-- Font Awesome 6 免费图标库 (纯图标，无文本干扰) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- marked.js Markdown解析库 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* 防止浏览器将缺失资源的 <object> 元素渲染为 “OBJECT ” 文本 */
+        object {
+            display: none;
+        }
+
+        body {
+            font-family: 'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            /* 整体背景做成渐变舞台，类似专业PPT画布 */
+            background:
+                radial-gradient(circle at top left, #1e293b 0, #020617 42%, #020617 100%),
+                radial-gradient(circle at bottom right, rgba(56, 189, 248, 0.25) 0, transparent 55%);
+            color: #e2e8f0;
+        }
+
+        /* 工具栏 - 半透明玻璃效果 */
+        .toolbar {
+            padding: 12px 28px;
+            background: rgba(255,255,255,0.85);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(0,30,60,0.08);
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+            flex-shrink: 0;
+        }
+        .toolbar button {
+            padding: 8px 22px;
+            font-size: 15px;
+            font-weight: 600;
+            border: none;
+            background: #ffffff;
+            color: #0A4D8C;
+            border-radius: 40px;
+            cursor: pointer;
+            transition: 0.2s;
+            box-shadow: 0 4px 8px rgba(0, 40, 80, 0.04);
+            border: 1px solid rgba(10, 77, 140, 0.15);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .toolbar button i {
+            font-size: 14px;
+            color: #0A4D8C;
+        }
+        .toolbar button:hover {
+            background: #f0f7ff;
+            border-color: #0A4D8C;
+            box-shadow: 0 8px 14px rgba(10,77,140,0.1);
+        }
+        .toolbar span {
+            color: #2c4c6e;
+            font-size: 14px;
+            margin-left: auto;
+            background: rgba(255,255,255,0.6);
+            padding: 6px 18px;
+            border-radius: 40px;
+            font-weight: 500;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(0,0,0,0.02);
+        }
+
+        /* 主布局：左右分栏 */
+        .main-layout {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            gap: 12px;
+            padding: 12px 12px 12px 12px;
+            background: transparent;
+        }
+
+        /* 左侧导航树 - 毛玻璃卡片 */
+        .tree-panel {
+            width: 340px;
+            background: rgba(255,255,255,0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-radius: 24px;
+            border: 1px solid rgba(255,255,255,0.5);
+            box-shadow: 0 20px 35px -8px rgba(0,30,60,0.15);
+            overflow-y: auto;
+            padding: 24px 0 20px 16px;
+            scrollbar-width: thin;
+            scrollbar-color: #a0bbd4 #eef3fa;
+        }
+        .tree-panel::-webkit-scrollbar {
+            width: 8px;
+        }
+        .tree-panel::-webkit-scrollbar-track {
+            background: #eef3fa;
+            border-radius: 20px;
+        }
+        .tree-panel::-webkit-scrollbar-thumb {
+            background: #a0bbd4;
+            border-radius: 20px;
+        }
+
+        .tree {
+            list-style: none;
+            font-size: 15px;
+            line-height: 1.7;
+            color: #1c3a5c;
+        }
+
+        .tree-node {
+            margin: 6px 0;
+            position: relative;
+        }
+
+        .tree-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px 8px 8px;
+            border-radius: 14px;
+            transition: background 0.15s;
+        }
+        .tree-item:hover {
+            background: rgba(10, 77, 140, 0.06);
+        }
+
+        /* 展开/折叠图标：使用Font Awesome，彻底杜绝文本 */
+        .toggle-icon {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            width: 24px;
+            height: 24px;
+            font-size: 16px;
+            color: #0A4D8C;
+            cursor: pointer;
+            user-select: none;
+            border-radius: 8px;
+            flex-shrink: 0;
+            transition: background 0.1s, transform 0.1s;
+        }
+        .toggle-icon:hover {
+            background: rgba(10, 77, 140, 0.12);
+        }
+        /* 折叠状态显示加号 (fa-plus) */
+        .tree-node:not(.expanded) > .tree-item .toggle-icon i {
+            display: inline-block;
+        }
+        .tree-node:not(.expanded) > .tree-item .toggle-icon .fa-minus {
+            display: none;
+        }
+        /* 展开状态显示减号 (fa-minus) */
+        .tree-node.expanded > .tree-item .toggle-icon .fa-plus {
+            display: none;
+        }
+        .tree-node.expanded > .tree-item .toggle-icon .fa-minus {
+            display: inline-block;
+        }
+        /* 没有子节点：隐藏图标区域 (保留占位以免对齐错乱) */
+        .tree-node.no-children > .tree-item .toggle-icon {
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .tree-link {
+            text-decoration: none;
+            color: #1c3a5c;
+            flex: 1;
+            word-break: break-word;
+            cursor: pointer;
+            font-weight: 500;
+            transition: color 0.1s;
+            font-size: 15px;
+        }
+        .tree-link:hover {
+            color: #0A4D8C;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+            text-decoration-thickness: 2px;
+        }
+
+        .tree-children {
+            list-style: none;
+            margin-left: 30px;  /* 缩进 */
+            display: none;
+        }
+
+        .tree-node.expanded > .tree-children {
+            display: block;
+        }
+
+        /* 右侧内容区 - 类似PPT内容画布 */
+        .content-panel {
+            flex: 1;
+            overflow-y: auto;
+            padding: 40px 64px 44px;
+            background:
+                radial-gradient(circle at top left, rgba(37, 99, 235, 0.22) 0, transparent 50%),
+                radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.24) 0, transparent 55%),
+                linear-gradient(135deg, #020617 0, #020617 40%, #020617 100%);
+            border-radius: 28px;
+            box-shadow: 0 26px 60px -18px rgba(15, 23, 42, 0.9);
+            font-size: 18px;
+            line-height: 1.8;
+            color: #e2e8f0;
+            scroll-behavior: smooth;
+            border: 1px solid rgba(148, 163, 184, 0.45);
+            max-width: 1120px;
+            margin-right: auto;
+        }
+
+        .content-panel h1,
+        .content-panel h2,
+        .content-panel h3,
+        .content-panel h4 {
+            margin-top: 2.2em;
+            margin-bottom: 0.8em;
+            font-weight: 650;
+            color: #e5f2ff;
+            border-bottom: 2px solid rgba(56, 189, 248, 0.35);
+            padding-bottom: 0.35em;
+            letter-spacing: -0.01em;
+            position: relative;
+        }
+        .content-panel h1::before,
+        .content-panel h2::before,
+        .content-panel h3::before,
+        .content-panel h4::before {
+            content: "";
+            position: absolute;
+            left: -20px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 70%;
+            border-radius: 999px;
+            background: linear-gradient(180deg, #38bdf8, #a855f7);
+        }
+        .content-panel h1 { font-size: 2.5em; border-bottom-width: 3px; }
+        .content-panel h2 { font-size: 2.1em; }
+        .content-panel h3 { font-size: 1.8em; }
+        .content-panel h4 { font-size: 1.5em; }
+
+        /* h2：大章节，顶部有横向分割彩带 */
+        .content-panel h2 {
+            padding-top: 1.4em;
+        }
+        .content-panel h2:not(:first-of-type)::before {
+            top: auto;
+            transform: none;
+            height: 0;
+        }
+        .content-panel h2:not(:first-of-type)::after {
+            content: "";
+            position: absolute;
+            left: -40px;
+            right: -40px;
+            top: -1.8em;
+            height: 3px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, rgba(56,189,248,0), rgba(56,189,248,0.85), rgba(168,85,247,0.9), rgba(56,189,248,0));
+        }
+
+        /* h3 标题：给一点色块背景，类似PPT小标题 */
+        .content-panel h3 {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 999px;
+            background: radial-gradient(circle at 0 0, rgba(56,189,248,0.38) 0, transparent 55%),
+                        linear-gradient(120deg, rgba(15,23,42,0.4), rgba(56,189,248,0.18));
+            border: 1px solid rgba(148,163,184,0.45);
+            font-size: 1.6em;
+            border-bottom: none;
+        }
+
+        /* h4 标题（痛点、解决方案等）做成标签感 */
+        .content-panel h4 {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(56, 189, 248, 0.7);
+            background: linear-gradient(120deg, rgba(15,23,42,0.8), rgba(56,189,248,0.16));
+            font-size: 1.1em;
+            border-bottom: none;
+        }
+        .content-panel h4::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: radial-gradient(circle at 30% 30%, #facc15 0, #f97316 35%, #f97316 100%);
+        }
+
+        .content-panel p {
+            margin: 1.1em 0;
+            color: #cbd5f5;
+        }
+
+        .content-panel ul,
+        .content-panel ol {
+            margin: 0.9em 0 1.4em 2.2em;
+        }
+        .content-panel li {
+            margin: 0.55em 0;
+            color: #e2e8f0;
+        }
+
+        .content-panel code {
+            background: rgba(15,23,42,0.92);
+            padding: 0.2em 0.8em;
+            border-radius: 8px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 0.85em;
+            color: #fbb6ce;
+            border: 1px solid rgba(248, 250, 252, 0.12);
+        }
+
+        .content-panel pre {
+            background: rgba(15,23,42,0.96);
+            padding: 18px 24px;
+            border-radius: 20px;
+            overflow-x: auto;
+            border: 1px solid rgba(148,163,184,0.4);
+            box-shadow: inset 0 2px 6px rgba(15,23,42,0.6);
+            margin: 1.5em 0;
+        }
+
+        .content-panel blockquote {
+            border-left: 4px solid rgba(56, 189, 248, 0.9);
+            background: linear-gradient(120deg, rgba(15,23,42,0.9), rgba(15,23,42,0.85), rgba(56,189,248,0.15));
+            padding: 16px 28px;
+            margin: 1.8em 0;
+            color: #e0f2fe;
+            border-radius: 0 24px 24px 0;
+            font-style: normal;
+            box-shadow: 0 4px 14px rgba(15,23,42,0.6);
+        }
+
+        .content-panel hr {
+            border: none;
+            border-top: 2px dashed rgba(148, 163, 184, 0.6);
+            margin: 2.4em 0;
+        }
+
+        .content-panel strong {
+            color: #fbbf24;
+            font-weight: 600;
+            background: radial-gradient(circle at 0 0, rgba(250, 204, 21, 0.35) 0, transparent 55%);
+            padding: 0 6px;
+            border-radius: 6px;
+        }
+
+        /* 高亮跳转目标 */
+        .content-panel :target {
+            background: linear-gradient(120deg, #fef7d2 0%, #fef7d2 30%, transparent 80%);
+            scroll-margin-top: 24px;
+            border-radius: 4px;
+        }
+
+        /* 列表标记美化 */
+        .content-panel li::marker {
+            color: #22c55e;
+            font-weight: 700;
+        }
+
+        /* 大章节容器卡片：用JS给每个 h2 所在区块包一层 .section-block */
+        .section-block {
+            margin: 2.2em -40px 2.4em;
+            padding: 1.6em 2.4em 1.8em;
+            border-radius: 24px;
+            background:
+                linear-gradient(135deg, rgba(15,23,42,0.95), rgba(15,23,42,0.9)),
+                radial-gradient(circle at top right, rgba(56,189,248,0.22) 0, transparent 60%);
+            border: 1px solid rgba(148,163,184,0.45);
+            box-shadow: 0 18px 40px rgba(15,23,42,0.9);
+        }
+        .section-block:nth-of-type(2n) {
+            background:
+                linear-gradient(135deg, rgba(15,23,42,0.96), rgba(30,64,175,0.75)),
+                radial-gradient(circle at bottom left, rgba(168,85,247,0.25) 0, transparent 55%);
+        }
+
+        /* 左侧树图标中的 i 元素默认无额外样式 */
+        .toggle-icon i {
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button id="zoomInBtn"><i class="fas fa-search-plus"></i> 放大</button>
+        <button id="zoomOutBtn"><i class="fas fa-search-minus"></i> 缩小</button>
+        <span><i class="far fa-compass" style="margin-right: 6px;"></i> 点击左侧节点跳转 · 点击 +/− 展开层级</span>
+    </div>
+
+    <div class="main-layout">
+        <!-- 左侧导航树容器 -->
+        <div class="tree-panel" id="treeContainer"></div>
+
+        <!-- 右侧内容容器（渲染后的markdown） -->
+        <div class="content-panel" id="contentContainer"></div>
+    </div>
+
+    <!-- 原始markdown数据 (与之前完全一致，确保无OBJECT文本) -->
+    <script id="markdownSource" type="text/plain">
+# AI技术提升教学、管理效能及在齐小牛智慧课堂的应用：从"精准"到"实效"------熟练应用蓝图
+
+## 第一部分：AI应用------建立"三大画像"
+
+### 一、学生画像（班主任、任课教师）
+
+#### 【痛点】
+
+- 学生信息管理难。
+- 家校沟通不深入。
+- 教学针对性不足。
+- 行为规范管理反复。
+- 实践教学差异大。
+
+#### 【AI解决方案】
+
+##### 1. 建立专属学生档案
+
+- 班主任将日常观察（性格、家庭、近期表现、谈话记录）通过语音或文字"投喂"给AI（如豆包）。
+- AI为每个学生建立并持续更新一个不断成长的数字档案。
+
+##### 2. 辅助沟通与决策
+
+- **家校沟通**：当家长询问时，直接问AI："帮我回忆一下小明最近的情况，我该怎么说？" AI迅速调取档案，生成个性化沟通建议。
+- **学生谈话**：与学生谈话时，开启AI录音纪要。AI自动分析谈话内容，总结学生心理状态，给老师提供后续引导建议，所有记录自动归入该学生画像。
+- **科学管理**：当需要安排班干部、分配任务时，可以问AI："我们班谁适合当劳动委员？帮我分析一下。"AI会基于平时记录给出客观建议。
+
+##### 3. 数据共享，全员育人
+
+- 将"学生画像"数据共享给任课教师。
+- 任课老师也能了解学生的大致情况（如近期状态、性格特点），在教学和辅导中更有针对性，实现全员、全过程育人。
+
+---
+
+### 二、工作画像------为各部门重复性、事务性工作建立AI画像
+
+#### 【1】做数据分析师
+
+##### 【痛点】
+
+- **学生处**：检查记录汇总、日常考核统计
+- **教务处**：查课数据记录、考试成绩统计
+- **行政部门**：各类信息录入
+- **安全督导**：食品安全检查记录
+
+##### 【AI解决方案】
+
+- **拍照→数据→表格**
+  - 任何纸质记录（宿舍检查表、查课记录、食品安全检查单、发票），只需用手机拍照。
+  - AI自动识别文字，并按预设的表格格式（如飞书多维表格）一键生成电子数据。
+  - **人工只需核对，彻底告别手动录入。**
+
+- **数据→分析→报告**
+  - 表格生成后，AI自动进行数据分析。
+  - **学生处**：分析宿舍扣分项（哪个宿舍因"叠被子"扣分最多？每周几卫生状况最差？），自动生成周报/月报，指出管理重点。
+  - **教务处**：分析查课数据，发现"下午第一节课学生犯困率最高"，从而建议老师调整课堂设计。
+  - **安全督导**：分析检查记录，发现高频问题点，针对性加强管理。
+
+---
+
+#### 【2】AI成为"工作大脑"
+
+##### 【痛点】
+
+- 工作琐碎，节点易忘。
+- 信息分散，总结难写。
+- 资产借用混乱。
+
+##### 【AI解决方案】
+
+- **智能工作管家**
+  - 将所有周期性工作告诉AI。
+  - 以后只需问"我这周要干什么？"，AI就会提醒你。
+  - 每天的工作日志发给它，到周末、月底、年底，它能一键帮你生成工作总结。
+
+- **透明化预约系统**
+  - 针对会议室、仓库钥匙、展厅钥匙等公共资源。
+  - 用AI辅助搭建一个简单的内部网站（无需编程基础）。
+  - 大家在线预约，资源占用情况一目了然，自动留痕。
+  - 避免电话反复确认的麻烦
+
+---
+
+#### 【3】AI日常办公提效工具
+
+##### 【工具示例】密塔回响
+
+- **功能**：
+  - **语音输入**：按快捷键直接说话，替代打字。
+  - **内容提炼**：不会逐字输出，而是提炼你说话的精髓。
+  - **快速搜索**：可直接询问天气、新闻等实时信息。
+  - **文字润色**：说出你想表达但说不清楚的话，AI帮你组织语言。
+  - **剪切板集成**：处理后的内容自动存入剪切板，可随时粘贴使用。
+
+---
+
+### 三、教师画像------让AI成为你的"教学合伙人"
+
+#### 【痛点】
+
+- 备课资源查找耗时。
+- 课件制作千篇一律。
+- 希望形成个人教学风格。
+
+#### 【AI解决方案】
+
+##### 1. 风格化备课
+
+- 告诉AI你的教学要求（如"符合中职学生认知"、"包含五步教学法"、"重点讲解XX知识点"）。
+- 当你再次让它备课或出题时，它会自动遵循你的"教师画像"，生成符合你个人风格的教案、课件和习题，越用越顺手。
+
+##### 2. 前沿资讯订阅
+
+- 设置一个AI工作流，让它每天自动搜索最新的教学方法、行业动态、教研成果。
+- 推送到你的邮箱或手机，让你时刻保持知识更新。
+
+##### 3. 技能大赛辅助
+
+- AI帮助梳理比赛要点、模拟场景、优化教学设计方案。
+
+---
+
+### 四、其他部门应用亮点
+
+#### 【宣传部】
+
+- **热点追踪器**：AI实时抓取抖音、小红书等平台的热点话题和爆款文案，为宣传提供选题思路。
+- **风格化文案助手**：将以往写的优秀公众号文章投喂给AI，它会学习你的写作风格和结构（背景-活动-意义）。下次只需提供要点，AI就能自动扩写成一篇符合你风格的完整文章。
+- **AI辅助视频剪辑**：协助进行宣传视频的剪辑创作。
+- **资讯学习**：针对"齐小牛俱乐部"推送的公众号教育资讯，用AI快速总结，提炼精髓，了解最新教育方法论。
+
+#### 【招生办】
+
+- **AI陪练，模拟演练**：
+  - 新老师面对家长提问经验不足？让AI扮演"刁钻家长"。
+  - 新老师进行模拟招生咨询，AI记录对话，点评回答，给出优化建议，快速提升沟通技巧。
+- **问题库与应答策略**：
+  - 汇总所有招生咨询记录，让AI分析家长最关心的问题、最难回答的问题。
+  - 生成标准化的最优应答方案，供团队共享学习。
+
+#### 【学生处】（补充）
+
+- **学生信息录入**：学生提交身份证PDF或拍照，AI批量识别并自动填充到系统表格。班主任只需负责审核校对，无需一个个手动输入。
+- **宿舍管理**：【工作画像-1】。
+
+#### 【财务处】
+
+- **发票录入**：【工作画像-1】。手机一拍，自动同步录入，人工核对即可。
+
+#### 【教务处】
+
+- **教材管理电子化**：
+  - **痛点**：教材申报依赖纸质流程，容易混乱、难追溯。
+  - **AI解决方案**：用AI搭建一个教材申报网站（无需编程基础）。教师登录账号即可提交申请，经过审核审批流程，实现全流程电子化、留痕管理。
+- **查课数据分析**：见【工作画像-子类1】。
+- **教研双创**：AI辅助技能大赛备赛，整理资料，优化方案。
+
+#### 【通用行政部门】（综合办、人事、信息中心等）
+
+- **重复劳动自动化**：
+  - **痛点**：凡是涉及"根据一个信息去录入另一个系统"的重复劳动（如录入教职工身份证信息、整理档案等）。
+  - **AI解决方案**：拍照识别，自动填充，告别手动录入。
+- **资产借用管理**：
+  - **痛点**：钥匙、设备等借用登记混乱，容易丢失。
+  - **AI解决方案**：见【工作画像-2-透明化预约系统】。
+
+#### 【安全督导】
+
+- **食品安全检查**：见【工作画像-1】。纸质检查报告拍照转表格，数据汇总分析。
+
+#### 【全校通用】工作节点提醒
+
+- **痛点**：各部门都有周期性工作（每月报税、每周例会、每学期资产盘点），容易遗漏。
+- **AI解决方案**：
+  - 将所有周期性工作梳理好，告诉AI。
+  - AI每天提醒你本周/今日该做什么。
+  - 每天把工作内容发给AI，到节点时AI自动汇总成工作总结。
+
+---
+
+### 五、AI编程能力的拓展应用
+
+#### 【搭建简易网站】
+
+- **教材申报网站**：实现电子化审批流程。
+- **资产预约系统**：实现会议室、钥匙等资源在线预约。
+- **培训课件**：用AI生成HTML网页版PPT，替代传统PPT。
+
+#### 【模拟界面】
+
+- **痛点**：培训齐小牛平板时，无法给每个老师发一台平板展示学生端。
+- **AI解决方案**：让AI编写HTML代码，模拟学生端的UI界面和核心功能，投屏演示。
+
+---
+
+## 第二部分：齐小牛智慧平板 + AI------打造智慧课堂新生态
+
+### 一、核心定位与能力边界
+
+#### 【两端定位】
+
+- **教师端**：网页端，用于备课、资源管理、课堂控制、数据查看。
+- **学生端**：平板端，用于接收课件、完成作业、实时答题、查看资源。
+
+#### 【能力边界】
+
+- **支持**：展示课件、文档、图片、视频；交互式答题（客观题）。
+- **暂不支持**：学生手写笔记、复杂画图等操作。
+
+---
+
+### 二、AI如何为智慧课堂赋能？（课前-课中-课后）
+
+#### 【课前备课】（AI+教师画像）
+
+##### 1. 一键生成教学资源
+
+- 丢给AI课程标准、教学重难点、教学法要求。
+- AI生成符合个人风格的教案、课件初稿。
+
+##### 2. 智能处理习题
+
+- **纸质题电子化**：拍照纸质导学案或试卷，AI自动识别并整理成可编辑的电子文档。
+- **一键调整格式**：
+  - **痛点**：平板对导入试题有严格的格式要求（需带"答案：""解析："标签），老师嫌麻烦。
+  - **AI解决方案**：将原始题目和格式要求告诉AI，AI瞬间调整好格式，直接导入题库。
+- **分层作业生成**：
+  - 根据学生课堂练习情况，让AI生成难度适宜的巩固题或拔高题。
+  - 实现个性化布置作业。
+
+##### 3. 课前预习与诊断
+
+- 将预习作业通过平板推送给学生。
+- 系统自动批改客观题，老师课前掌握预习情况，精准调整教学设计。
+
+#### 【课中教学】（AI+多媒体+实时互动）
+
+##### 1. AI丰富教学资源
+
+- 用AI生成与课程相关的图片、短视频、历史人物3D数字人对话。
+- 让枯燥的知识点"活"起来，创设真实情境（如让"齐小牛"IP引出问题）。
+
+##### 2. 极速课堂反馈
+
+- **实时投放习题**：课中随时将题目投放到学生平板。
+- **数据秒级汇总**：学生作答后，教师端立即显示正确率、每个选项的选择人数。
+- **精准教学**：针对高频错题进行精讲。
+- **为追求速度**：可将填空题转化为选择题，实现极速作答反馈。
+
+##### 3. 遵循教学法
+
+- 所有AI工具的使用，都是为了更好地服务于既定的教学法（如五步教学法：导入-新授-练习-巩固-作业）。
+- 让传统环节（如导入）更生动，而不是脱离教学框架。
+
+#### 【课后巩固与题库沉淀】
+
+##### 1. 智能批改与学情分析
+
+- **平板作业**：客观题自动批改，主观题可通过拍照上传。
+- **AI辅助批改**：减轻老师批改负担。
+- **自动汇总**：全班学情生成分析报告。
+
+##### 2. 校本题库建设
+
+- **资源沉淀**：教师将平时整理的优质习题，按知识点、难度等分类录入系统。
+- **传承复用**：日积月累，形成校本题库，未来老师备课可直接调用。
+
+---
+
+### 三、培训中的AI妙用：用AI模拟学生端
+
+#### 【痛点】
+
+- 在给老师们培训时，无法给每人发一个平板展示学生端界面。
+
+#### 【AI解决方案】
+
+- 让AI（如DeepSeek）编写一个简单的HTML页面。
+- 模拟学生端在平板上的UI界面和核心功能。
+- 培训时直接投屏演示，让所有老师都能直观地看到学生眼中的课堂是什么样。
+- **意义**：用AI解决工作难题
+
+---
+
+## 结语：培训本身即案例------AI重塑工作方式
+
+### 一、本次培训的诞生过程
+
+#### 【构思阶段】
+
+- 与AI对话，把所有零散的想法"倒"给它。
+- AI帮我梳理出了清晰的框架。
+
+#### 【深化阶段】
+
+- 基于框架，向AI提问。
+- AI帮我补充思路、完善细节。
+
+#### 【呈现阶段】
+
+- 没有做PPT。
+- 让AI根据我的思维导图，直接生成了一个精美的HTML网页版演示文稿。
+
+### 二、总结与号召
+
+#### 【核心理念】
+
+- 用AI解决工作问题，并不遥远。
+- AI就像一个有求必应的助手，完成梳理、写作、编程、设计等繁琐的"前期工作"。
+
+#### 【最终目标】
+
+- 让人能专注于最核心的思考和决策。
+- 找到自己工作中"画像"的起点。
+- 让AI真正成为我们提质增效的超级引擎。
+
+---
+
+*注：本Markdown文档已完整梳理原稿所有要点，无任何删减，结构清晰，层级分明，可直接用于生成思维导图或制作PPT内容框架。*
+    </script>
+
+    <script>
+        (function() {
+            // 1. 获取原始markdown
+            const source = document.getElementById('markdownSource').textContent;
+
+            // 2. 使用marked的lexer得到tokens
+            const tokens = marked.lexer(source);
+
+            // 3. 收集heading tokens并赋予唯一id
+            let headingIndex = 0;
+            const headingTokens = [];
+            tokens.forEach(token => {
+                if (token.type === 'heading') {
+                    token.headingId = `heading-${headingIndex++}`;
+                    headingTokens.push(token);
+                }
+            });
+
+            // 构建标题树
+            function buildTree(headings) {
+                const root = [];
+                const stack = [];
+                headings.forEach(h => {
+                    const node = {
+                        level: h.depth,
+                        text: h.text,
+                        id: h.headingId,
+                        children: []
+                    };
+                    if (stack.length === 0) {
+                        root.push(node);
+                        stack.push(node);
+                    } else {
+                        while (stack.length && stack[stack.length-1].level >= node.level) {
+                            stack.pop();
+                        }
+                        if (stack.length === 0) {
+                            root.push(node);
+                        } else {
+                            stack[stack.length-1].children.push(node);
+                        }
+                        stack.push(node);
+                    }
+                });
+                return root;
+            }
+
+            const treeRoot = buildTree(headingTokens);
+
+            // 4. 渲染左侧树 (使用FontAwesome图标，彻底无文本)
+            function renderTree(nodes) {
+                if (!nodes || nodes.length === 0) return '';
+                let html = '<ul class="tree">';
+                nodes.forEach(node => {
+                    const hasChildren = node.children && node.children.length > 0;
+                    const noChildrenClass = hasChildren ? '' : 'no-children';
+                    html += `<li class="tree-node ${noChildrenClass}" data-id="${node.id}">`;
+                    html += `<div class="tree-item">`;
+                    // 图标使用Font Awesome，内嵌两个图标通过CSS控制显示隐藏
+                    html += `<span class="toggle-icon">`;
+                    html += `<i class="fas fa-plus"></i>`;
+                    html += `<i class="fas fa-minus"></i>`;
+                    html += `</span>`;
+                    html += `<a href="#${node.id}" class="tree-link">${node.text}</a>`;
+                    html += `</div>`;
+                    if (hasChildren) {
+                        html += `<ul class="tree-children">`;
+                        html += renderTree(node.children);
+                        html += `</ul>`;
+                    }
+                    html += `</li>`;
+                });
+                html += '</ul>';
+                return html;
+            }
+
+            const treeHTML = renderTree(treeRoot);
+            document.getElementById('treeContainer').innerHTML = treeHTML;
+
+            // 5. 渲染右侧markdown内容，为标题添加自定义id
+            const renderer = new marked.Renderer();
+            let idIndex = 0;
+            renderer.heading = function(text, level, raw, slugger) {
+                const id = headingTokens[idIndex]?.headingId || `heading-${idIndex}`;
+                idIndex++;
+                return `<h${level} id="${id}">${text}</h${level}>`;
+            };
+
+            marked.use({ renderer });
+            marked.setOptions({
+                headerIds: false,
+                mangle: false,
+                gfm: true
+            });
+
+            // 重新解析以确保id分配顺序正确
+            const freshTokens = marked.lexer(source);
+            idIndex = 0;
+            let contentHTML = marked.parser(freshTokens, { renderer });
+            // 防御性处理：清理意外渲染出来的 [object Object] 文本
+            contentHTML = contentHTML.replace(/\[object Object\]/g, '');
+            const contentContainer = document.getElementById('contentContainer');
+            contentContainer.innerHTML = contentHTML;
+
+            // 5.1 为每个 h2 区块包裹 .section-block，让大章节像 PPT 分页
+            const headingsLevel2 = Array.from(contentContainer.querySelectorAll('h2'));
+            headingsLevel2.forEach((h2, index) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'section-block';
+                // 将 h2 及其后续兄弟节点（直到下一个 h2 前）移动到 wrapper 中
+                let node = h2;
+                while (node && node.tagName !== 'H2') {
+                    node = node.nextSibling;
+                }
+                // 此时 node === h2
+                let current = h2;
+                const nextH2 = headingsLevel2[index + 1] || null;
+                while (current && current !== nextH2) {
+                    const next = current.nextSibling;
+                    wrapper.appendChild(current);
+                    current = next;
+                }
+                contentContainer.insertBefore(wrapper, nextH2);
+            });
+
+            // 6. 交互：展开/折叠
+            const treeContainer = document.getElementById('treeContainer');
+            treeContainer.addEventListener('click', (e) => {
+                const target = e.target;
+                // 点击图标区域或图标本身
+                if (target.closest('.toggle-icon')) {
+                    e.preventDefault();
+                    const li = target.closest('.tree-node');
+                    if (li) {
+                        li.classList.toggle('expanded');
+                    }
+                }
+                if (target.classList.contains('tree-link')) {
+                    e.preventDefault();
+                    const href = target.getAttribute('href');
+                    const targetId = href.substring(1);
+                    const targetEl = document.getElementById(targetId);
+                    if (targetEl) {
+                        targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        history.pushState(null, null, href);
+                    }
+                }
+            });
+
+            // 默认展开第一级，方便浏览
+            document.querySelectorAll('.tree-node').forEach(li => {
+                if (!li.classList.contains('no-children')) {
+                    li.classList.add('expanded');
+                }
+            });
+
+            // 7. 缩放功能
+            const contentPanel = document.querySelector('.content-panel');
+            let currentFontSize = 18;
+            document.getElementById('zoomInBtn').addEventListener('click', () => {
+                currentFontSize = Math.min(32, currentFontSize + 2);
+                contentPanel.style.fontSize = currentFontSize + 'px';
+            });
+            document.getElementById('zoomOutBtn').addEventListener('click', () => {
+                currentFontSize = Math.max(14, currentFontSize - 2);
+                contentPanel.style.fontSize = currentFontSize + 'px';
+            });
+
+            if (window.location.hash) {
+                const id = window.location.hash.substring(1);
+                setTimeout(() => {
+                    const el = document.getElementById(id);
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }, 200);
+            }
+        })();
+    </script>
+</body>
+</html>
